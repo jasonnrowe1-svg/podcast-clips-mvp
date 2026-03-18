@@ -1,0 +1,24 @@
+1
+00:00:00,000 --> 00:00:02,166
+Got it. No, you
+
+2
+00:00:02,166 --> 00:00:04,333
+wouldn't be able to
+
+3
+00:00:04,333 --> 00:00:06,500
+do it because it
+
+4
+00:00:06,500 --> 00:00:08,666
+starts off with charging
+
+5
+00:00:08,666 --> 00:00:10,833
+the card and then
+
+6
+00:00:10,833 --> 00:00:13,000
+it issues statement credits.
+

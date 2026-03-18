@@ -1,0 +1,292 @@
+[
+  {
+    "id": 0,
+    "seek": 0,
+    "start": 0.0,
+    "end": 7.0,
+    "text": " I'm up over there.",
+    "tokens": [
+      50364,
+      286,
+      478,
+      493,
+      670,
+      456,
+      13,
+      50714
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 1,
+    "seek": 0,
+    "start": 7.0,
+    "end": 10.0,
+    "text": " There you go.",
+    "tokens": [
+      50714,
+      821,
+      291,
+      352,
+      13,
+      50864
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 2,
+    "seek": 0,
+    "start": 10.0,
+    "end": 14.0,
+    "text": " I don't want him.",
+    "tokens": [
+      50864,
+      286,
+      500,
+      380,
+      528,
+      796,
+      13,
+      51064
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 3,
+    "seek": 0,
+    "start": 14.0,
+    "end": 17.0,
+    "text": " Oh, I think that would make batteries.",
+    "tokens": [
+      51064,
+      876,
+      11,
+      286,
+      519,
+      300,
+      576,
+      652,
+      13070,
+      13,
+      51214
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 4,
+    "seek": 0,
+    "start": 17.0,
+    "end": 20.0,
+    "text": " Oh, is that the batteries?",
+    "tokens": [
+      51214,
+      876,
+      11,
+      307,
+      300,
+      264,
+      13070,
+      30,
+      51364
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 5,
+    "seek": 0,
+    "start": 20.0,
+    "end": 23.0,
+    "text": " Yeah.",
+    "tokens": [
+      51364,
+      865,
+      13,
+      51514
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 6,
+    "seek": 0,
+    "start": 23.0,
+    "end": 29.0,
+    "text": " Okay.",
+    "tokens": [
+      51514,
+      1033,
+      13,
+      51814
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.5237761644216684,
+    "compression_ratio": 1.2075471698113207,
+    "no_speech_prob": 0.36496442556381226
+  },
+  {
+    "id": 7,
+    "seek": 2900,
+    "start": 29.0,
+    "end": 34.0,
+    "text": " Oh.",
+    "tokens": [
+      50364,
+      876,
+      13,
+      50614
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 8,
+    "seek": 2900,
+    "start": 34.0,
+    "end": 41.0,
+    "text": " She will grab that sucker.",
+    "tokens": [
+      50614,
+      1240,
+      486,
+      4444,
+      300,
+      43259,
+      13,
+      50964
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 9,
+    "seek": 2900,
+    "start": 41.0,
+    "end": 43.0,
+    "text": " Get a good shot while you're trying.",
+    "tokens": [
+      50964,
+      3240,
+      257,
+      665,
+      3347,
+      1339,
+      291,
+      434,
+      1382,
+      13,
+      51064
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 10,
+    "seek": 2900,
+    "start": 43.0,
+    "end": 50.0,
+    "text": " Just don't follow the couch.",
+    "tokens": [
+      51064,
+      1449,
+      500,
+      380,
+      1524,
+      264,
+      16511,
+      13,
+      51414
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 11,
+    "seek": 2900,
+    "start": 50.0,
+    "end": 52.0,
+    "text": " You think they come off?",
+    "tokens": [
+      51414,
+      509,
+      519,
+      436,
+      808,
+      766,
+      30,
+      51514
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 12,
+    "seek": 2900,
+    "start": 52.0,
+    "end": 57.0,
+    "text": " They're supposed to come off, I think.",
+    "tokens": [
+      51514,
+      814,
+      434,
+      3442,
+      281,
+      808,
+      766,
+      11,
+      286,
+      519,
+      13,
+      51764
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.29235015092072664,
+    "compression_ratio": 1.25,
+    "no_speech_prob": 0.03188446909189224
+  },
+  {
+    "id": 13,
+    "seek": 5700,
+    "start": 57.0,
+    "end": 64.0,
+    "text": " I'm ready.",
+    "tokens": [
+      50364,
+      286,
+      478,
+      1919,
+      13,
+      50714
+    ],
+    "temperature": 0.0,
+    "avg_logprob": -0.8214767319815499,
+    "compression_ratio": 0.5555555555555556,
+    "no_speech_prob": 0.4635769724845886
+  }
+]

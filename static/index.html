@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Podcast Clips MVP</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: #0f1115;
+      color: #f5f7fb;
+    }
+
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .header {
+      margin-bottom: 24px;
+    }
+
+    .header h1 {
+      margin: 0 0 8px 0;
+      font-size: 32px;
+    }
+
+    .header p {
+      margin: 0;
+      color: #a9b2c3;
+      font-size: 15px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 24px;
+      align-items: start;
+    }
+
+    .left-column,
+    .right-column {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .card {
+      background: #171a21;
+      border: 1px solid #252a35;
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    }
+
+    .card h2,
+    .card h3 {
+      margin-top: 0;
+    }
+
+    .muted {
+      color: #a9b2c3;
+    }
+
+    .upload-box {
+      border: 2px dashed #364055;
+      border-radius: 14px;
+      padding: 24px;
+      text-align: center;
+      background: #11141a;
+    }
+
+    .upload-box input[type="file"] {
+      margin-top: 12px;
+      color: #f5f7fb;
+    }
+
+    .button-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 16px;
+    }
+
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 11px 16px;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    button:hover {
+      opacity: 0.95;
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    .secondary-btn {
+      background: #2a3140;
+    }
+
+    .danger-btn {
+      background: #c2410c;
+    }
+
+    .status-line {
+      margin-top: 10px;
+      font-size: 14px;
+      color: #d0d7e6;
+    }
+
+    .progress-wrap {
+      width: 100%;
+      height: 12px;
+      background: #0d1016;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 12px;
+      border: 1px solid #273042;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #3b82f6;
+      transition: width 0.3s ease;
+    }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .sort-group {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    select {
+      background: #10141c;
+      color: #f5f7fb;
+      border: 1px solid #31394a;
+      border-radius: 10px;
+      padding: 8px 10px;
+    }
+
+    .clips-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 16px;
+    }
+
+    .clip-card {
+      background: #11151d;
+      border: 1px solid #2b3342;
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .clip-thumb {
+      width: 100%;
+      height: 160px;
+      object-fit: cover;
+      background: #0d1117;
+    }
+
+    .clip-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .clip-title-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #1f2937;
+      color: #cbd5e1;
+    }
+
+    .top-pick {
+      background: #14532d;
+      color: #dcfce7;
+    }
+
+    .clip-meta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      font-size: 13px;
+      color: #c7d0de;
+    }
+
+    .clip-preview-text {
+      font-size: 13px;
+      color: #aeb7c8;
+      line-height: 1.4;
+      min-height: 54px;
+    }
+
+    .clip-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .detail-placeholder {
+      color: #a9b2c3;
+      font-size: 14px;
+    }
+
+    .detail-video,
+    .final-video {
+      width: 100%;
+      max-height: 420px;
+      border-radius: 12px;
+      background: black;
+    }
+
+    .detail-thumb {
+      width: 100%;
+      max-height: 240px;
+      object-fit: cover;
+      border-radius: 12px;
+      margin-top: 12px;
+      border: 1px solid #2b3342;
+    }
+
+    .detail-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin: 14px 0;
+    }
+
+    .stat-box {
+      background: #10141c;
+      border: 1px solid #283142;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: #9eabc0;
+      margin-bottom: 6px;
+    }
+
+    .stat-value {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f3f6fc;
+    }
+
+    .transcript-box {
+      margin-top: 14px;
+      padding: 12px;
+      background: #10141c;
+      border: 1px solid #283142;
+      border-radius: 12px;
+      max-height: 220px;
+      overflow-y: auto;
+      line-height: 1.5;
+      color: #d5dcea;
+      font-size: 14px;
+      white-space: pre-wrap;
+    }
+
+    .download-link {
+      display: inline-block;
+      margin-top: 12px;
+      color: #93c5fd;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .download-link:hover {
+      text-decoration: underline;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    @media (max-width: 1024px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="header">
+      <h1>Podcast Clips MVP</h1>
+      <p>Upload a long video, find the best moments, and turn them into vertical social clips.</p>
+    </div>
+
+    <div class="layout">
+      <div class="left-column">
+        <div class="card">
+          <h2>Upload Video</h2>
+          <div class="upload-box">
+            <div>Select a podcast or long-form video to begin.</div>
+            <input type="file" id="videoFile" accept="video/*" />
+            <div class="button-row">
+              <button id="uploadBtn">Upload Video</button>
+              <button id="processBtn" class="secondary-btn" disabled>Find Best Clips</button>
+            </div>
+            <div class="status-line" id="uploadStatus">No file uploaded yet.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Processing Status</h2>
+          <div class="muted" id="jobStage">Waiting to start.</div>
+          <div class="progress-wrap">
+            <div class="progress-bar" id="jobProgressBar"></div>
+          </div>
+          <div class="status-line" id="jobStatusText">No active job.</div>
+        </div>
+
+        <div class="card">
+          <div class="toolbar">
+            <div>
+              <h2 style="margin-bottom: 6px;">Suggested Clips</h2>
+              <div class="muted">Review, preview, and choose the best clip to render.</div>
+            </div>
+            <div class="sort-group">
+              <label for="sortBy">Sort by:</label>
+              <select id="sortBy">
+                <option value="timeline">Timeline</option>
+                <option value="score">Best Score</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="clipsGrid" class="clips-grid"></div>
+        </div>
+      </div>
+
+      <div class="right-column">
+        <div class="card">
+          <h2>Selected Clip</h2>
+          <div id="selectedClipEmpty" class="detail-placeholder">
+            Select a clip to preview it here.
+          </div>
+
+          <div id="selectedClipContent" class="hidden">
+            <video id="selectedClipVideo" class="detail-video" controls></video>
+            <img id="selectedClipThumb" class="detail-thumb" alt="Clip thumbnail" />
+
+            <div class="detail-stats">
+              <div class="stat-box">
+                <div class="stat-label">Clip Number</div>
+                <div class="stat-value" id="detailClipNumber">-</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Score</div>
+                <div class="stat-value" id="detailScore">-</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Duration</div>
+                <div class="stat-value" id="detailDuration">-</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Time Range</div>
+                <div class="stat-value" id="detailTimeRange">-</div>
+              </div>
+            </div>
+
+            <div>
+              <h3 style="margin-bottom: 8px;">Transcript</h3>
+              <div id="detailTranscript" class="transcript-box"></div>
+            </div>
+
+            <div class="button-row">
+              <button id="renderBtn">Create Vertical Clip</button>
+              <a id="downloadSourceLink" class="download-link" href="#" target="_blank">Download Source Clip</a>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Final Render</h2>
+          <div class="muted" id="renderStage">No active render.</div>
+          <div class="progress-wrap">
+            <div class="progress-bar" id="renderProgressBar"></div>
+          </div>
+          <div class="status-line" id="renderStatusText">Choose a clip and render it.</div>
+
+          <div id="finalRenderArea" class="hidden" style="margin-top: 16px;">
+            <video id="finalVideo" class="final-video" controls></video>
+            <a id="finalDownloadLink" class="download-link" href="#" target="_blank">Download Final Vertical Clip</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let uploadedFilename = null;
+    let currentJobId = null;
+    let currentSortBy = "timeline";
+    let clipsData = [];
+    let selectedClip = null;
+    let currentRenderJobId = null;
+
+    const videoFileInput = document.getElementById("videoFile");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const processBtn = document.getElementById("processBtn");
+    const uploadStatus = document.getElementById("uploadStatus");
+
+    const jobStage = document.getElementById("jobStage");
+    const jobStatusText = document.getElementById("jobStatusText");
+    const jobProgressBar = document.getElementById("jobProgressBar");
+
+    const sortBySelect = document.getElementById("sortBy");
+    const clipsGrid = document.getElementById("clipsGrid");
+
+    const selectedClipEmpty = document.getElementById("selectedClipEmpty");
+    const selectedClipContent = document.getElementById("selectedClipContent");
+    const selectedClipVideo = document.getElementById("selectedClipVideo");
+    const selectedClipThumb = document.getElementById("selectedClipThumb");
+    const detailClipNumber = document.getElementById("detailClipNumber");
+    const detailScore = document.getElementById("detailScore");
+    const detailDuration = document.getElementById("detailDuration");
+    const detailTimeRange = document.getElementById("detailTimeRange");
+    const detailTranscript = document.getElementById("detailTranscript");
+    const renderBtn = document.getElementById("renderBtn");
+    const downloadSourceLink = document.getElementById("downloadSourceLink");
+
+    const renderStage = document.getElementById("renderStage");
+    const renderStatusText = document.getElementById("renderStatusText");
+    const renderProgressBar = document.getElementById("renderProgressBar");
+    const finalRenderArea = document.getElementById("finalRenderArea");
+    const finalVideo = document.getElementById("finalVideo");
+    const finalDownloadLink = document.getElementById("finalDownloadLink");
+
+    uploadBtn.addEventListener("click", uploadVideo);
+    processBtn.addEventListener("click", startJob);
+    sortBySelect.addEventListener("change", async function () {
+      currentSortBy = sortBySelect.value;
+      if (currentJobId) {
+        await loadJobResults();
+      }
+    });
+    renderBtn.addEventListener("click", startFinalRender);
+
+    function formatSeconds(seconds) {
+      if (seconds === null || seconds === undefined || isNaN(seconds)) {
+        return "-";
+      }
+
+      const totalSeconds = Math.floor(Number(seconds));
+      const minutes = Math.floor(totalSeconds / 60);
+      const remainingSeconds = totalSeconds % 60;
+      return `${minutes}:${String(remainingSeconds).padStart(2, "0")}`;
+    }
+
+    function formatTimeRange(start, end) {
+      return `${formatSeconds(start)} - ${formatSeconds(end)}`;
+    }
+
+    function safeText(value) {
+      if (!value) return "";
+      return String(value);
+    }
+
+    async function uploadVideo() {
+      const file = videoFileInput.files[0];
+
+      if (!file) {
+        uploadStatus.textContent = "Please choose a video file first.";
+        return;
+      }
+
+      uploadBtn.disabled = true;
+      processBtn.disabled = true;
+      uploadStatus.textContent = "Uploading video...";
+
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const response = await fetch("/upload-video", {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || data.error || "Upload failed");
+        }
+
+        uploadedFilename = data.filename;
+        uploadStatus.textContent = `Uploaded: ${uploadedFilename}`;
+        processBtn.disabled = false;
+      } catch (error) {
+        uploadStatus.textContent = `Upload failed: ${error.message}`;
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    }
+
+    async function startJob() {
+      if (!uploadedFilename) {
+        jobStatusText.textContent = "Upload a video first.";
+        return;
+      }
+
+      processBtn.disabled = true;
+      uploadBtn.disabled = true;
+      clipsGrid.innerHTML = "";
+      clearSelectedClip();
+      resetFinalRenderUI();
+
+      jobStage.textContent = "Starting analysis...";
+      jobStatusText.textContent = "Preparing job...";
+      jobProgressBar.style.width = "10%";
+
+      try {
+        const response = await fetch("/start-job", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ filename: uploadedFilename })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || data.error || "Failed to start job");
+        }
+
+        currentJobId = data.job_id;
+        pollJobResults();
+      } catch (error) {
+        jobStage.textContent = "Error";
+        jobStatusText.textContent = error.message;
+        jobProgressBar.style.width = "0%";
+        processBtn.disabled = false;
+        uploadBtn.disabled = false;
+      }
+    }
+
+    async function pollJobResults() {
+      let attempts = 0;
+
+      const interval = setInterval(async function () {
+        attempts += 1;
+
+        if (attempts < 3) {
+          jobStage.textContent = "Extracting and transcribing...";
+          jobStatusText.textContent = "Processing video and transcript...";
+          jobProgressBar.style.width = "30%";
+        } else if (attempts < 6) {
+          jobStage.textContent = "Finding clip candidates...";
+          jobStatusText.textContent = "Scoring and filtering the best segments...";
+          jobProgressBar.style.width = "65%";
+        } else {
+          jobStage.textContent = "Finalizing...";
+          jobStatusText.textContent = "Preparing clips and thumbnails...";
+          jobProgressBar.style.width = "85%";
+        }
+
+        try {
+          const response = await fetch(`/job-results/${currentJobId}?sort_by=${currentSortBy}`);
+          const data = await response.json();
+
+          if (data.error) {
+            clearInterval(interval);
+            jobStage.textContent = "Error";
+            jobStatusText.textContent = data.error;
+            jobProgressBar.style.width = "0%";
+            processBtn.disabled = false;
+            uploadBtn.disabled = false;
+            return;
+          }
+
+          if (data.status && data.status !== "complete") {
+            return;
+          }
+
+          clearInterval(interval);
+
+          clipsData = data.clips || [];
+          renderClipsGrid();
+
+          jobStage.textContent = "Ready";
+          jobStatusText.textContent = `${clipsData.length} clips available.`;
+          jobProgressBar.style.width = "100%";
+
+          processBtn.disabled = false;
+          uploadBtn.disabled = false;
+        } catch (error) {
+          clearInterval(interval);
+          jobStage.textContent = "Error";
+          jobStatusText.textContent = error.message;
+          jobProgressBar.style.width = "0%";
+          processBtn.disabled = false;
+          uploadBtn.disabled = false;
+        }
+      }, 2500);
+    }
+
+    async function loadJobResults() {
+      if (!currentJobId) return;
+
+      try {
+        const response = await fetch(`/job-results/${currentJobId}?sort_by=${currentSortBy}`);
+        const data = await response.json();
+
+        clipsData = data.clips || [];
+        renderClipsGrid();
+      } catch (error) {
+        jobStatusText.textContent = `Failed to reload clips: ${error.message}`;
+      }
+    }
+
+    function renderClipsGrid() {
+      clipsGrid.innerHTML = "";
+
+      if (!clipsData.length) {
+        clipsGrid.innerHTML = `<div class="muted">No clips found.</div>`;
+        return;
+      }
+
+      clipsData.forEach(function (clip, index) {
+        const clipNumber = clip.clip_number ?? clip.clip_num ?? index + 1;
+        const score = clip.score ?? "-";
+        const duration = clip.duration ?? ((clip.end ?? 0) - (clip.start ?? 0));
+        const start = clip.start ?? clip.start_time ?? 0;
+        const end = clip.end ?? clip.end_time ?? 0;
+        const transcript = safeText(clip.text || clip.transcript || clip.preview || "");
+        const previewText = transcript.length > 110 ? transcript.slice(0, 110) + "..." : transcript;
+
+        const isTopPick = currentSortBy === "score" && index < 3;
+
+        const clipCard = document.createElement("div");
+        clipCard.className = "clip-card";
+
+        clipCard.innerHTML = `
+          <img
+            class="clip-thumb"
+            src="/view-thumbnail/${currentJobId}/${clipNumber}"
+            alt="Thumbnail for clip ${clipNumber}"
+            onerror="this.src=''; this.style.background='#0d1117';"
+          />
+          <div class="clip-body">
+            <div class="clip-title-row">
+              <strong>Clip ${clipNumber}</strong>
+              ${isTopPick ? '<span class="badge top-pick">Top Pick</span>' : '<span class="badge">Candidate</span>'}
+            </div>
+
+            <div class="clip-meta">
+              <div><strong>Score:</strong> ${score}</div>
+              <div><strong>Length:</strong> ${formatSeconds(duration)}</div>
+              <div><strong>Start:</strong> ${formatSeconds(start)}</div>
+              <div><strong>End:</strong> ${formatSeconds(end)}</div>
+            </div>
+
+            <div class="clip-preview-text">${previewText || "No transcript preview available."}</div>
+
+            <div class="clip-actions">
+              <button class="secondary-btn" data-action="preview">Preview</button>
+              <button data-action="select">Select</button>
+            </div>
+          </div>
+        `;
+
+        const previewBtn = clipCard.querySelector('[data-action="preview"]');
+        const selectBtn = clipCard.querySelector('[data-action="select"]');
+
+        previewBtn.addEventListener("click", function () {
+          selectClip(clip, clipNumber);
+        });
+
+        selectBtn.addEventListener("click", function () {
+          selectClip(clip, clipNumber);
+        });
+
+        clipsGrid.appendChild(clipCard);
+      });
+    }
+
+    function selectClip(clip, clipNumber) {
+      selectedClip = {
+        ...clip,
+        clip_number: clipNumber
+      };
+
+      selectedClipEmpty.classList.add("hidden");
+      selectedClipContent.classList.remove("hidden");
+
+      const score = clip.score ?? "-";
+      const start = clip.start ?? clip.start_time ?? 0;
+      const end = clip.end ?? clip.end_time ?? 0;
+      const duration = clip.duration ?? (end - start);
+      const transcript = safeText(clip.text || clip.transcript || clip.preview || "No transcript available.");
+
+      selectedClipVideo.src = `/view-clip/${currentJobId}/${clipNumber}`;
+      selectedClipThumb.src = `/view-thumbnail/${currentJobId}/${clipNumber}`;
+      detailClipNumber.textContent = clipNumber;
+      detailScore.textContent = score;
+      detailDuration.textContent = formatSeconds(duration);
+      detailTimeRange.textContent = formatTimeRange(start, end);
+      detailTranscript.textContent = transcript;
+      downloadSourceLink.href = `/view-clip/${currentJobId}/${clipNumber}`;
+
+      resetFinalRenderUI();
+    }
+
+    function clearSelectedClip() {
+      selectedClip = null;
+      selectedClipEmpty.classList.remove("hidden");
+      selectedClipContent.classList.add("hidden");
+      selectedClipVideo.src = "";
+      selectedClipThumb.src = "";
+      detailClipNumber.textContent = "-";
+      detailScore.textContent = "-";
+      detailDuration.textContent = "-";
+      detailTimeRange.textContent = "-";
+      detailTranscript.textContent = "";
+      downloadSourceLink.href = "#";
+    }
+
+    async function startFinalRender() {
+      if (!currentJobId || !selectedClip) {
+        renderStatusText.textContent = "Select a clip first.";
+        return;
+      }
+
+      renderBtn.disabled = true;
+      renderStage.textContent = "Starting render...";
+      renderStatusText.textContent = "Preparing final vertical clip...";
+      renderProgressBar.style.width = "15%";
+      finalRenderArea.classList.add("hidden");
+      finalVideo.src = "";
+      finalDownloadLink.href = "#";
+
+      try {
+        const response = await fetch(`/start-final-render/${currentJobId}/${selectedClip.clip_number}`, {
+          method: "POST"
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.detail || data.error || "Failed to start final render");
+        }
+
+        currentRenderJobId = data.render_job_id;
+        pollFinalRender();
+      } catch (error) {
+        renderStage.textContent = "Error";
+        renderStatusText.textContent = error.message;
+        renderProgressBar.style.width = "0%";
+        renderBtn.disabled = false;
+      }
+    }
+
+    async function pollFinalRender() {
+      let attempts = 0;
+
+      const interval = setInterval(async function () {
+        attempts += 1;
+
+        if (attempts < 3) {
+          renderStage.textContent = "Burning captions...";
+          renderStatusText.textContent = "Applying subtitles and formatting...";
+          renderProgressBar.style.width = "35%";
+        } else if (attempts < 6) {
+          renderStage.textContent = "Formatting vertical video...";
+          renderStatusText.textContent = "Building 1080x1920 social clip...";
+          renderProgressBar.style.width = "70%";
+        } else {
+          renderStage.textContent = "Finalizing export...";
+          renderStatusText.textContent = "Wrapping up output file...";
+          renderProgressBar.style.width = "90%";
+        }
+
+        try {
+          const response = await fetch(`/final-render-status/${currentRenderJobId}`);
+          const data = await response.json();
+
+          if (data.error) {
+            clearInterval(interval);
+            renderStage.textContent = "Error";
+            renderStatusText.textContent = data.error;
+            renderProgressBar.style.width = "0%";
+            renderBtn.disabled = false;
+            return;
+          }
+
+          if (data.status && data.status !== "complete") {
+            return;
+          }
+
+          clearInterval(interval);
+
+          renderStage.textContent = "Complete";
+          renderStatusText.textContent = "Your final clip is ready.";
+          renderProgressBar.style.width = "100%";
+
+          const finalUrl = `/view-final/${currentJobId}/${selectedClip.clip_number}`;
+          finalVideo.src = finalUrl;
+          finalDownloadLink.href = finalUrl;
+          finalRenderArea.classList.remove("hidden");
+
+          renderBtn.disabled = false;
+        } catch (error) {
+          clearInterval(interval);
+          renderStage.textContent = "Error";
+          renderStatusText.textContent = error.message;
+          renderProgressBar.style.width = "0%";
+          renderBtn.disabled = false;
+        }
+      }, 2500);
+    }
+
+    function resetFinalRenderUI() {
+      currentRenderJobId = null;
+      renderStage.textContent = "No active render.";
+      renderStatusText.textContent = "Choose a clip and render it.";
+      renderProgressBar.style.width = "0%";
+      finalRenderArea.classList.add("hidden");
+      finalVideo.src = "";
+      finalDownloadLink.href = "#";
+      renderBtn.disabled = false;
+    }
+  </script>
+</body>
+</html>
