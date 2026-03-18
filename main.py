@@ -271,6 +271,7 @@ async def upload_video(file: UploadFile = File(...)):
 
     return {
         "message": "Video uploaded",
+        "filename": file.filename,
         "file_path": file_path
     }
 
