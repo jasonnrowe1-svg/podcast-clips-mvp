@@ -579,28 +579,32 @@
     async function pollJobResults() {
       let attempts = 0;
 
-      const interval = setInterval(async function () {
-        attempts += 1;
+        const interval = setInterval(async function () {
+          attempts += 1;
 
-        if (attempts < 3) {
-          jobStage.textContent = "Extracting and transcribing...";
-          jobStatusText.textContent = "Processing video and transcript...";
-          jobProgressBar.style.width = "30%";
-        } else if (attempts < 6) {
-          jobStage.textContent = "Finding clip candidates...";
-          jobStatusText.textContent = "Scoring and filtering the best segments...";
-          jobProgressBar.style.width = "65%";
-        } else {
-          jobStage.textContent = "Finalizing...";
-          jobStatusText.textContent = "Preparing clips and thumbnails...";
-          jobProgressBar.style.width = "85%";
-        }
-
-        try {
+          try {
           const response = await fetch(`/job-results/${currentJobId}?sort_by=${currentSortBy}`);
           const data = await response.json();
 
-          if (data.error) {
+          if (data.stage) {
+            jobStage.textContent = data.stage;
+          }
+
+          if (data.progress !== undefined && data.progress !== null) {
+            jobProgressBar.style.width = `${data.progress}%`;
+          }
+
+          if (data.status === "failed") {
+            clearInterval(interval);
+            jobStage.textContent = data.stage || "Error";
+            jobStatusText.textContent = data.error || "Processing failed.";
+            jobProgressBar.style.width = "0%";
+            processBtn.disabled = false;
+            uploadBtn.disabled = false;
+            return;
+          }
+
+          if (data.error && data.status !== "complete") {
             clearInterval(interval);
             jobStage.textContent = "Error";
             jobStatusText.textContent = data.error;
@@ -611,6 +615,7 @@
           }
 
           if (data.status && data.status !== "complete") {
+            jobStatusText.textContent = data.stage || "Processing...";
             return;
           }
 
@@ -619,9 +624,14 @@
           clipsData = data.clips || [];
           renderClipsGrid();
 
-          jobStage.textContent = "Ready";
+          jobStage.textContent = data.stage || "Ready";
           jobStatusText.textContent = `${clipsData.length} clips available.`;
-          jobProgressBar.style.width = "100%";
+          jobProgressBar.style.width = `${data.progress ?? 100}%`;
+
+          if (clipsData.length > 0) {
+            const firstClipNumber = clipsData[0].clip_number ?? clipsData[0].clip_num ?? 1;
+            selectClip(clipsData[0], firstClipNumber);
+          }
 
           processBtn.disabled = false;
           uploadBtn.disabled = false;
@@ -652,6 +662,7 @@
 
     function renderClipsGrid() {
       clipsGrid.innerHTML = "";
+      console.log("clipsData in renderClipsGrid:", clipsData);
 
       if (!clipsData.length) {
         clipsGrid.innerHTML = `<div class="muted">No clips found.</div>`;

@@ -1,0 +1,12 @@
+1
+00:00:00,000 --> 00:00:02,000
+Got it.
+
+2
+00:00:02,000 --> 00:00:09,000
+You wouldn't be able to do it because it starts off with charging the card and then it issues statement credits.
+
+3
+00:00:09,000 --> 00:00:24,000
+So if you're not able to make a charge, it's not going to work on Amazon.
+

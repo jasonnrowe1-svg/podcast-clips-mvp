@@ -478,7 +478,8 @@ def has_good_clip_boundaries(text):
 def run_pipeline_job(job_id, video_path):
     try:
         JOBS[job_id]["status"] = "processing"
-        JOBS[job_id]["stage"] = "extracting audio"
+        JOBS[job_id]["stage"] = "Extracting audio..."
+        JOBS[job_id]["progress"] = 15
 
         os.makedirs("output", exist_ok=True)
         os.makedirs("transcripts", exist_ok=True)
@@ -501,6 +502,8 @@ def run_pipeline_job(job_id, video_path):
 
         if extract_result.returncode != 0:
             JOBS[job_id]["status"] = "failed"
+            JOBS[job_id]["stage"] = "Processing failed"
+            JOBS[job_id]["progress"] = 0
             JOBS[job_id]["error"] = "Audio extraction failed"
             return
         
@@ -509,14 +512,14 @@ def run_pipeline_job(job_id, video_path):
 
         if audio_duration < 1:
             JOBS[job_id]["status"] = "failed"
-            JOBS[job_id]["stage"] = "failed"
+            JOBS[job_id]["stage"] = "Processing failed"
+            JOBS[job_id]["progress"] = 0
             JOBS[job_id]["error"] = "Extracted audio is too short or empty"
             return
+
+        JOBS[job_id]["stage"] = "Transcribing audio..."
+        JOBS[job_id]["progress"] = 35
         
-
-        JOBS[job_id]["stage"] = "transcribing"
-
-
         # transcribe
         result = model.transcribe(AUDIO_PATH)
 
@@ -534,8 +537,8 @@ def run_pipeline_job(job_id, video_path):
         JOBS[job_id]["max_clip_duration"] = max_clip_duration
 
 
-        JOBS[job_id]["stage"] = "building clip candidates"
-
+        JOBS[job_id]["stage"] = "Building clip candidates..."
+        JOBS[job_id]["progress"] = 55
 
         # find clips by combining neighboring segments
         clips = []
@@ -574,18 +577,21 @@ def run_pipeline_job(job_id, video_path):
                         "score": clip_score
                     })
                     break
-        JOBS[job_id]["stage"] = "ranking clips"
+        JOBS[job_id]["stage"] = "Scoring and filtering clips..."
+        JOBS[job_id]["progress"] = 70
         clips.sort(key=lambda x: x["score"], reverse=True)
         JOBS[job_id]["raw_clip_candidates"] = len(clips)
-        
-        MAX_CLIPS = 8
-        clips = clips[:MAX_CLIPS]
+
+        CANDIDATE_POOL_SIZE = 30
+        FINAL_MAX_CLIPS = 8
+
+        clips = clips[:CANDIDATE_POOL_SIZE]
 
         # keep best non-overlapping clips
         filtered_clips = []
         remaining_clips = clips.copy()
 
-        while remaining_clips:
+        while remaining_clips and len(filtered_clips) < FINAL_MAX_CLIPS:
             best_clip = remaining_clips.pop(0)
             filtered_clips.append(best_clip)
 
@@ -604,14 +610,16 @@ def run_pipeline_job(job_id, video_path):
         filtered_clips.sort(key=lambda x: x["start"])
         clips = filtered_clips
         JOBS[job_id]["filtered_clip_candidates"] = len(clips)
-        JOBS[job_id]["stage"] = "cutting clips"
+        JOBS[job_id]["stage"] = "Cutting clips and generating thumbnails..."
+        JOBS[job_id]["progress"] = 85
         created_clips = []
 
         for index, clip in enumerate(clips, start=1):
             output_file = os.path.join(CLIPS_PATH, f"{job_id}_clip_{index}.mp4")
             thumbnail_file = os.path.join(THUMBNAILS_PATH, f"{job_id}_clip_{index}.jpg")
             
-            JOBS[job_id]["stage"] = f"cutting clip {index}/{len(clips)}"
+            JOBS[job_id]["stage"] = f"Cutting clip {index} of {len(clips)}..."
+            JOBS[job_id]["progress"] = min(95, 85 + int((index / max(1, len(clips))) * 8))
 
             cut_command = [
                 "ffmpeg",
@@ -625,7 +633,8 @@ def run_pipeline_job(job_id, video_path):
 
             cut_result = subprocess.run(cut_command, capture_output=True, text=True)
             
-            JOBS[job_id]["stage"] = f"generating thumbnails ({index}/{len(clips)})"
+            JOBS[job_id]["stage"] = f"Generating thumbnail {index} of {len(clips)}..."
+            JOBS[job_id]["progress"] = min(98, 86 + int((index / max(1, len(clips))) * 10))
 
             thumbnail_command = [
                 "ffmpeg",
@@ -652,14 +661,17 @@ def run_pipeline_job(job_id, video_path):
             })
 
         JOBS[job_id]["status"] = "complete"
-        JOBS[job_id]["stage"] = "complete"
+        JOBS[job_id]["stage"] = "Ready"
+        JOBS[job_id]["progress"] = 100
         JOBS[job_id]["segment_count"] = len(result["segments"])
         JOBS[job_id]["clip_count"] = len(created_clips)
         JOBS[job_id]["clips"] = created_clips
+        
 
     except Exception as e:
         JOBS[job_id]["status"] = "failed"
-        JOBS[job_id]["stage"] = "failed"
+        JOBS[job_id]["stage"] = "Processing failed"
+        JOBS[job_id]["progress"] = 0
         JOBS[job_id]["error"] = str(e)
 
 @app.post("/start-job")
@@ -671,10 +683,12 @@ def start_job():
     job_id = str(uuid.uuid4())
 
     JOBS[job_id] = {
-        "status": "queued",
-        "stage": "queued",
-        "video": CURRENT_VIDEO
+    "status": "processing",
+    "stage": "Starting job...",
+    "progress": 5,
+    "clips": []
     }
+    
 
     thread = threading.Thread(target=run_pipeline_job, args=(job_id, CURRENT_VIDEO))
     thread.start()
@@ -705,7 +719,9 @@ def job_results(job_id: str, sort_by: str = "timeline"):
         return {
             "job_id": job_id,
             "status": job["status"],
-            "stage": job.get("stage"),
+            "stage": job.get("stage", "Processing..."),
+            "progress": job.get("progress", 0),
+            "error": job.get("error"),
             "message": "Job is not complete yet"
         }
 
@@ -729,11 +745,14 @@ def job_results(job_id: str, sort_by: str = "timeline"):
             "thumbnail_url": f"/view-thumbnail/{job_id}/{clip['clip_number']}",
             "view_url": f"/view-clip/{job_id}/{clip['clip_number']}"
         })
+        
+     
 
     return {
         "job_id": job_id,
         "status": job["status"],
-        "stage": job.get("stage"),
+        "stage": job.get("stage", "Ready"),
+        "progress": job.get("progress", 100),
         "video_duration": job.get("video_duration"),
         "audio_duration": job.get("audio_duration"),
         "min_clip_duration": job.get("min_clip_duration"),
@@ -794,6 +813,7 @@ def download_all(job_id: str):
         return {"error": "Job not complete"}
 
     clips = job.get("clips", [])
+    
 
     if not clips:
         return {"error": "No clips found"}
