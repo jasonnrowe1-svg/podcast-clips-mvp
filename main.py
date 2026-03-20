@@ -737,6 +737,8 @@ def job_results(job_id: str, sort_by: str = "timeline"):
     for clip in clips:
         cleaned_clips.append({
             "clip_number": clip["clip_number"],
+            "start": clip["start"],
+            "end": clip["end"],
             "duration": clip["duration"],
             "text": clip["text"],
             "score": clip.get("score"),
@@ -855,11 +857,13 @@ def home():
 def run_final_render_job(render_job_id, job_id, clip_number):
     try:
         RENDER_JOBS[render_job_id]["status"] = "processing"
-        RENDER_JOBS[render_job_id]["stage"] = "preparing"
+        RENDER_JOBS[render_job_id]["stage"] = "Preparing render..."
+        RENDER_JOBS[render_job_id]["progress"] = 10
 
         if job_id not in JOBS:
             RENDER_JOBS[render_job_id]["status"] = "failed"
-            RENDER_JOBS[render_job_id]["stage"] = "failed"
+            RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+            RENDER_JOBS[render_job_id]["progress"] = 0
             RENDER_JOBS[render_job_id]["error"] = "Job not found"
             return
 
@@ -867,7 +871,8 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         if job["status"] != "complete":
             RENDER_JOBS[render_job_id]["status"] = "failed"
-            RENDER_JOBS[render_job_id]["stage"] = "failed"
+            RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+            RENDER_JOBS[render_job_id]["progress"] = 0
             RENDER_JOBS[render_job_id]["error"] = "Job is not complete yet"
             return
 
@@ -879,7 +884,8 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         if matching_clip is None:
             RENDER_JOBS[render_job_id]["status"] = "failed"
-            RENDER_JOBS[render_job_id]["stage"] = "failed"
+            RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+            RENDER_JOBS[render_job_id]["progress"] = 0
             RENDER_JOBS[render_job_id]["error"] = "Clip not found"
             return
 
@@ -891,7 +897,8 @@ def run_final_render_job(render_job_id, job_id, clip_number):
         vertical_file = os.path.join(FINAL_CLIPS_PATH, f"{job_id}_clip_{clip_number}_vertical.mp4")
         final_file = os.path.join(FINAL_CLIPS_PATH, f"{job_id}_clip_{clip_number}_final.mp4")
 
-        RENDER_JOBS[render_job_id]["stage"] = "creating captions"
+        RENDER_JOBS[render_job_id]["stage"] = "Creating captions..."
+        RENDER_JOBS[render_job_id]["progress"] = 30
 
         def format_srt_time(seconds):
             hours = int(seconds // 3600)
@@ -930,7 +937,8 @@ def run_final_render_job(render_job_id, job_id, clip_number):
                 f.write(f"{format_srt_time(seg['start'])} --> {format_srt_time(seg['end'])}\n")
                 f.write(f"{seg['text']}\n\n")
 
-        RENDER_JOBS[render_job_id]["stage"] = "making vertical version"
+        RENDER_JOBS[render_job_id]["stage"] = "Formatting vertical video..."
+        RENDER_JOBS[render_job_id]["progress"] = 55
 
         vertical_command = [
             "ffmpeg",
@@ -950,14 +958,16 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         if vertical_result.returncode != 0:
             RENDER_JOBS[render_job_id]["status"] = "failed"
-            RENDER_JOBS[render_job_id]["stage"] = "failed"
+            RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+            RENDER_JOBS[render_job_id]["progress"] = 0
             RENDER_JOBS[render_job_id]["error"] = "Vertical render failed"
             RENDER_JOBS[render_job_id]["stderr"] = vertical_result.stderr[-1000:]
             return
 
         subtitle_file_ffmpeg = caption_file.replace("\\", "/").replace(":", "\\:")
 
-        RENDER_JOBS[render_job_id]["stage"] = "burning captions (fast mode)"
+        RENDER_JOBS[render_job_id]["stage"] = "Burning captions..."
+        RENDER_JOBS[render_job_id]["progress"] = 80
 
         burn_command = [
             "ffmpeg",
@@ -975,20 +985,23 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         if burn_result.returncode != 0:
             RENDER_JOBS[render_job_id]["status"] = "failed"
-            RENDER_JOBS[render_job_id]["stage"] = "failed"
+            RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+            RENDER_JOBS[render_job_id]["progress"] = 0
             RENDER_JOBS[render_job_id]["error"] = "Caption burn failed"
             RENDER_JOBS[render_job_id]["stderr"] = burn_result.stderr[-1000:]
             return
 
         RENDER_JOBS[render_job_id]["status"] = "complete"
-        RENDER_JOBS[render_job_id]["stage"] = "complete"
+        RENDER_JOBS[render_job_id]["stage"] = "Ready"
+        RENDER_JOBS[render_job_id]["progress"] = 100
         RENDER_JOBS[render_job_id]["job_id"] = job_id
         RENDER_JOBS[render_job_id]["clip_number"] = clip_number
         RENDER_JOBS[render_job_id]["final_file"] = final_file
         
     except Exception as e:
         RENDER_JOBS[render_job_id]["status"] = "failed"
-        RENDER_JOBS[render_job_id]["stage"] = "failed"
+        RENDER_JOBS[render_job_id]["stage"] = "Render failed"
+        RENDER_JOBS[render_job_id]["progress"] = 0
         RENDER_JOBS[render_job_id]["error"] = str(e)      
 
 
@@ -998,30 +1011,8 @@ def start_final_render(job_id: str, clip_number: int):
 
     RENDER_JOBS[render_job_id] = {
         "status": "queued",
-        "stage": "queued",
-        "job_id": job_id,
-        "clip_number": clip_number
-    }
-
-    thread = threading.Thread(
-        target=run_final_render_job,
-        args=(render_job_id, job_id, clip_number)
-    )
-    thread.start()
-
-    return {
-        "message": "Final render started",
-        "render_job_id": render_job_id,
-        "status": "queued"
-    }
-
-@app.post("/start-final-render/{job_id}/{clip_number}")
-def start_final_render(job_id: str, clip_number: int):
-    render_job_id = str(uuid.uuid4())
-
-    RENDER_JOBS[render_job_id] = {
-        "status": "queued",
-        "stage": "queued",
+        "stage": "Queued",
+        "progress": 5,
         "job_id": job_id,
         "clip_number": clip_number
     }

@@ -5,8 +5,31 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Podcast Clips MVP</title>
   <style>
+    #summaryCard.hidden {
+      display: none;
+    }
     * {
       box-sizing: border-box;
+    }
+
+    .clip-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .clip-badge {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #2b3342;
+      color: #9aa4b2;
+    }
+
+    .clip-card.selected .clip-badge {
+      background: #3b82f6;
+      color: white;
+      font-weight: 600;
     }
 
     body {
@@ -14,12 +37,15 @@
       font-family: Arial, Helvetica, sans-serif;
       background: #0f1115;
       color: #f5f7fb;
+      overflow-x: hidden;
     }
 
     .app {
-      max-width: 1400px;
+      max-width: 1280px;
       margin: 0 auto;
-      padding: 24px;
+      padding: 20px;
+      width: 100%;
+      overflow-x: hidden;
     }
 
     .header {
@@ -39,9 +65,10 @@
 
     .layout {
       display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 24px;
+      grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+      gap: 20px;
       align-items: start;
+      width: 100%;
     }
 
     .left-column,
@@ -49,6 +76,7 @@
       display: flex;
       flex-direction: column;
       gap: 20px;
+      min-width: 0;
     }
 
     .card {
@@ -57,6 +85,8 @@
       border-radius: 16px;
       padding: 18px;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+      min-width: 0;
+      overflow: hidden;
     }
 
     .card h2,
@@ -175,6 +205,14 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      transition: border 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+    }
+
+    .clip-card.selected {
+      border: 2px solid #3b82f6;
+      background: #182235;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.35), 0 0 18px rgba(59, 130, 246, 0.15);
+      transform: translateY(-2px);
     }
 
     .clip-thumb {
@@ -242,18 +280,22 @@
     .detail-video,
     .final-video {
       width: 100%;
+      max-width: 100%;
       max-height: 420px;
       border-radius: 12px;
       background: black;
+      display: block;
     }
 
     .detail-thumb {
       width: 100%;
+      max-width: 100%;
       max-height: 240px;
       object-fit: cover;
       border-radius: 12px;
       margin-top: 12px;
       border: 1px solid #2b3342;
+      display: block;
     }
 
     .detail-stats {
@@ -312,7 +354,7 @@
       display: none;
     }
 
-    @media (max-width: 1024px) {
+    @media (max-width: 1350px) {
       .layout {
         grid-template-columns: 1fr;
       }
@@ -325,6 +367,7 @@
       <h1>Podcast Clips MVP</h1>
       <p>Upload a long video, find the best moments, and turn them into vertical social clips.</p>
     </div>
+
 
     <div class="layout">
       <div class="left-column">
@@ -348,6 +391,28 @@
             <div class="progress-bar" id="jobProgressBar"></div>
           </div>
           <div class="status-line" id="jobStatusText">No active job.</div>
+        </div>
+
+                <div class="card hidden" id="summaryCard"></div>
+          <h2>Session Summary</h2>
+          <div class="detail-stats">
+            <div class="stat-box">
+              <div class="stat-label">File</div>
+              <div class="stat-value" id="summaryFile">-</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Video Length</div>
+              <div class="stat-value" id="summaryVideoLength">-</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Clips Found</div>
+              <div class="stat-value" id="summaryClipCount">-</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Best Score</div>
+              <div class="stat-value" id="summaryBestScore">-</div>
+            </div>
+          </div>
         </div>
 
         <div class="card">
@@ -434,6 +499,7 @@
     let currentSortBy = "timeline";
     let clipsData = [];
     let selectedClip = null;
+    let selectedClipCardElement = null;
     let currentRenderJobId = null;
 
     const videoFileInput = document.getElementById("videoFile");
@@ -466,6 +532,11 @@
     const finalRenderArea = document.getElementById("finalRenderArea");
     const finalVideo = document.getElementById("finalVideo");
     const finalDownloadLink = document.getElementById("finalDownloadLink");
+    const summaryCard = document.getElementById("summaryCard");
+    const summaryFile = document.getElementById("summaryFile");
+    const summaryVideoLength = document.getElementById("summaryVideoLength");
+    const summaryClipCount = document.getElementById("summaryClipCount");
+    const summaryBestScore = document.getElementById("summaryBestScore");
 
     uploadBtn.addEventListener("click", uploadVideo);
     processBtn.addEventListener("click", startJob);
@@ -526,6 +597,8 @@
 
         uploadedFilename = data.filename;
         uploadStatus.textContent = `Uploaded: ${uploadedFilename}`;
+        summaryFile.textContent = uploadedFilename;
+        summaryCard.classList.remove("hidden");
         processBtn.disabled = false;
       } catch (error) {
         uploadStatus.textContent = `Upload failed: ${error.message}`;
@@ -545,6 +618,9 @@
       clipsGrid.innerHTML = "";
       clearSelectedClip();
       resetFinalRenderUI();
+      summaryVideoLength.textContent = "-";
+      summaryClipCount.textContent = "-";
+      summaryBestScore.textContent = "-";
 
       jobStage.textContent = "Starting analysis...";
       jobStatusText.textContent = "Preparing job...";
@@ -624,14 +700,24 @@
           clipsData = data.clips || [];
           renderClipsGrid();
 
+          summaryVideoLength.textContent = formatSeconds(data.video_duration);
+          summaryClipCount.textContent = clipsData.length;
+
+          const bestScore = clipsData.length
+            ? Math.max(...clipsData.map(clip => Number(clip.score ?? 0)))
+            : "-";
+
+          summaryBestScore.textContent = bestScore;
+
           jobStage.textContent = data.stage || "Ready";
           jobStatusText.textContent = `${clipsData.length} clips available.`;
           jobProgressBar.style.width = `${data.progress ?? 100}%`;
 
-          if (clipsData.length > 0) {
+        if (clipsData.length > 0) {
             const firstClipNumber = clipsData[0].clip_number ?? clipsData[0].clip_num ?? 1;
-            selectClip(clipsData[0], firstClipNumber);
-          }
+            const firstClipCard = document.querySelector(".clip-card");
+            selectClip(clipsData[0], firstClipNumber, firstClipCard);
+        }
 
           processBtn.disabled = false;
           uploadBtn.disabled = false;
@@ -662,7 +748,7 @@
 
     function renderClipsGrid() {
       clipsGrid.innerHTML = "";
-      console.log("clipsData in renderClipsGrid:", clipsData);
+      
 
       if (!clipsData.length) {
         clipsGrid.innerHTML = `<div class="muted">No clips found.</div>`;
@@ -692,7 +778,10 @@
           />
           <div class="clip-body">
             <div class="clip-title-row">
-              <strong>Clip ${clipNumber}</strong>
+              <div class="clip-header">
+                <strong>Clip ${clipNumber}</strong>
+                <span class="clip-badge">Candidate</span>
+          </div>
               ${isTopPick ? '<span class="badge top-pick">Top Pick</span>' : '<span class="badge">Candidate</span>'}
             </div>
 
@@ -708,30 +797,59 @@
             <div class="clip-actions">
               <button class="secondary-btn" data-action="preview">Preview</button>
               <button data-action="select">Select</button>
+              <button class="secondary-btn" data-action="render">Create Vertical</button>
             </div>
           </div>
         `;
 
         const previewBtn = clipCard.querySelector('[data-action="preview"]');
         const selectBtn = clipCard.querySelector('[data-action="select"]');
+        const renderCardBtn = clipCard.querySelector('[data-action="render"]');
 
         previewBtn.addEventListener("click", function () {
-          selectClip(clip, clipNumber);
+          selectClip(clip, clipNumber, clipCard);
         });
 
         selectBtn.addEventListener("click", function () {
-          selectClip(clip, clipNumber);
+          selectClip(clip, clipNumber, clipCard);
+        });
+
+        renderCardBtn.addEventListener("click", function () {
+          selectClip(clip, clipNumber, clipCard);
+          startFinalRender();
+        });
+
+        clipCard.addEventListener("click", function (event) {
+          if (event.target.tagName.toLowerCase() === "button") {
+            return;
+          }
+
+          selectClip(clip, clipNumber, clipCard);
         });
 
         clipsGrid.appendChild(clipCard);
       });
     }
 
-    function selectClip(clip, clipNumber) {
+    function selectClip(clip, clipNumber, clipCardElement = null) {
       selectedClip = {
         ...clip,
         clip_number: clipNumber
       };
+
+      if (selectedClipCardElement) {
+        selectedClipCardElement.classList.remove("selected");
+      }
+
+      if (clipCardElement) {
+        clipCardElement.classList.add("selected");
+        selectedClipCardElement = clipCardElement;
+      } else {
+        const allClipCards = document.querySelectorAll(".clip-card");
+        allClipCards.forEach(function (card) {
+          card.classList.remove("selected");
+        });
+      }
 
       selectedClipEmpty.classList.add("hidden");
       selectedClipContent.classList.remove("hidden");
@@ -756,6 +874,12 @@
 
     function clearSelectedClip() {
       selectedClip = null;
+
+      if (selectedClipCardElement) {
+        selectedClipCardElement.classList.remove("selected");
+        selectedClipCardElement = null;
+      }
+
       selectedClipEmpty.classList.remove("hidden");
       selectedClipContent.classList.add("hidden");
       selectedClipVideo.src = "";
@@ -775,6 +899,7 @@
       }
 
       renderBtn.disabled = true;
+      renderBtn.textContent = "Rendering...";
       renderStage.textContent = "Starting render...";
       renderStatusText.textContent = "Preparing final vertical clip...";
       renderProgressBar.style.width = "15%";
@@ -804,47 +929,51 @@
     }
 
     async function pollFinalRender() {
-      let attempts = 0;
-
       const interval = setInterval(async function () {
-        attempts += 1;
-
-        if (attempts < 3) {
-          renderStage.textContent = "Burning captions...";
-          renderStatusText.textContent = "Applying subtitles and formatting...";
-          renderProgressBar.style.width = "35%";
-        } else if (attempts < 6) {
-          renderStage.textContent = "Formatting vertical video...";
-          renderStatusText.textContent = "Building 1080x1920 social clip...";
-          renderProgressBar.style.width = "70%";
-        } else {
-          renderStage.textContent = "Finalizing export...";
-          renderStatusText.textContent = "Wrapping up output file...";
-          renderProgressBar.style.width = "90%";
-        }
-
         try {
           const response = await fetch(`/final-render-status/${currentRenderJobId}`);
           const data = await response.json();
 
-          if (data.error) {
+          if (data.stage) {
+            renderStage.textContent = data.stage;
+          }
+
+          if (data.progress !== undefined && data.progress !== null) {
+            renderProgressBar.style.width = `${data.progress}%`;
+          }
+
+          if (data.status === "failed") {
+            clearInterval(interval);
+            renderStage.textContent = data.stage || "Error";
+            renderStatusText.textContent = data.error || "Render failed.";
+            renderProgressBar.style.width = "0%";
+            renderBtn.disabled = false;
+            renderBtn.textContent = "Create Vertical Clip";
+            currentRenderJobId = null;
+            return;
+          }
+
+          if (data.error && data.status !== "complete") {
             clearInterval(interval);
             renderStage.textContent = "Error";
             renderStatusText.textContent = data.error;
             renderProgressBar.style.width = "0%";
             renderBtn.disabled = false;
+            renderBtn.textContent = "Create Vertical Clip";
+            currentRenderJobId = null;
             return;
           }
 
           if (data.status && data.status !== "complete") {
+            renderStatusText.textContent = data.stage || "Rendering...";
             return;
           }
 
           clearInterval(interval);
 
-          renderStage.textContent = "Complete";
+          renderStage.textContent = data.stage || "Ready";
           renderStatusText.textContent = "Your final clip is ready.";
-          renderProgressBar.style.width = "100%";
+          renderProgressBar.style.width = `${data.progress ?? 100}%`;
 
           const finalUrl = `/view-final/${currentJobId}/${selectedClip.clip_number}`;
           finalVideo.src = finalUrl;
@@ -852,12 +981,16 @@
           finalRenderArea.classList.remove("hidden");
 
           renderBtn.disabled = false;
+          renderBtn.textContent = "Create Vertical Clip";
+          currentRenderJobId = null;
         } catch (error) {
           clearInterval(interval);
           renderStage.textContent = "Error";
           renderStatusText.textContent = error.message;
           renderProgressBar.style.width = "0%";
           renderBtn.disabled = false;
+          renderBtn.textContent = "Create Vertical Clip";
+          currentRenderJobId = null;
         }
       }, 2500);
     }
@@ -871,6 +1004,7 @@
       finalVideo.src = "";
       finalDownloadLink.href = "#";
       renderBtn.disabled = false;
+      renderBtn.textContent = "Create Vertical Clip";
     }
   </script>
 </body>
