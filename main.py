@@ -3,6 +3,8 @@ from fastapi import FastAPI
 import subprocess
 import json
 import os
+import re
+import time
 import whisper
 from fastapi import UploadFile, File
 import shutil
@@ -10,6 +12,7 @@ import threading
 import uuid
 from fastapi.responses import FileResponse
 import zipfile
+import cv2
 
 app = FastAPI()
 
@@ -24,6 +27,7 @@ FINAL_CLIPS_PATH = "output/final_clips"
 THUMBNAILS_PATH = "output/thumbnails"
 
 CURRENT_VIDEO = None
+LAST_UPLOAD_INFO = {}
 JOBS = {}
 RENDER_JOBS = {}
 
@@ -258,7 +262,9 @@ def make_vertical():
 @app.post("/upload-video")
 async def upload_video(file: UploadFile = File(...)):
 
-    global CURRENT_VIDEO
+    global CURRENT_VIDEO, LAST_UPLOAD_INFO
+
+    start_upload = time.time()
 
     os.makedirs("uploads", exist_ok=True)
 
@@ -269,10 +275,22 @@ async def upload_video(file: UploadFile = File(...)):
 
     CURRENT_VIDEO = file_path
 
+    upload_time = round(time.time() - start_upload, 2)
+    file_size_bytes = os.path.getsize(file_path)
+
+    LAST_UPLOAD_INFO = {
+        "filename": file.filename,
+        "file_path": file_path,
+        "upload_time_seconds": upload_time,
+        "file_size_bytes": file_size_bytes
+    }
+
     return {
         "message": "Video uploaded",
         "filename": file.filename,
-        "file_path": file_path
+        "file_path": file_path,
+        "upload_time_seconds": upload_time,
+        "file_size_bytes": file_size_bytes
     }
 
 
@@ -396,40 +414,215 @@ def get_clip_length_targets(video_duration):
         return 8, 30
     else:
         return 15, 45
+    
+def normalize_text_for_scoring(text):
+    cleaned = text.strip()
+    lower_text = cleaned.lower()
+    words = re.findall(r"\b[\w'-]+\b", lower_text)
+    return cleaned, lower_text, words
+
+
+def has_heavy_repetition(words):
+    if len(words) < 12:
+        return False
+
+    repeated_bigrams = 0
+    seen = {}
+
+    for i in range(len(words) - 1):
+        bigram = (words[i], words[i + 1])
+        seen[bigram] = seen.get(bigram, 0) + 1
+
+    for count in seen.values():
+        if count >= 3:
+            repeated_bigrams += 1
+
+    return repeated_bigrams >= 1
+
+
+def get_hook_pattern_score(lower_text):
+    hook_patterns = [
+        "the problem is",
+        "here's why",
+        "this is why",
+        "what people don't realize",
+        "what people do not realize",
+        "most people",
+        "the truth is",
+        "the reality is",
+        "the reason is",
+        "the reason why",
+        "the mistake",
+        "the biggest mistake",
+        "nobody talks about",
+        "you know what",
+        "the thing is",
+        "if you're",
+        "if you are",
+        "why do",
+        "why does",
+        "how do",
+        "how does",
+        "what happens when",
+        "the difference is",
+        "it turns out",
+        "what matters is",
+        "the key is",
+        "the hard part is"
+    ]
+
+    score = 0
+    for pattern in hook_patterns:
+        if pattern in lower_text:
+            score += 8
+
+    return score
+
+
+def get_takeaway_pattern_score(lower_text):
+    takeaway_patterns = [
+        "which means",
+        "that means",
+        "so if",
+        "so the",
+        "that's why",
+        "this means",
+        "the takeaway",
+        "the lesson",
+        "the point is",
+        "in other words",
+        "because",
+        "therefore"
+    ]
+
+    score = 0
+    for pattern in takeaway_patterns:
+        if pattern in lower_text:
+            score += 5
+
+    return score
+
+
+def get_specificity_score(cleaned, words):
+    score = 0
+
+    number_matches = re.findall(r"\b\d+\b", cleaned)
+    score += min(len(number_matches) * 3, 9)
+
+    if len(words) >= 40:
+        score += 4
+
+    unique_ratio = len(set(words)) / max(len(words), 1)
+    if unique_ratio > 0.72:
+        score += 6
+    elif unique_ratio > 0.6:
+        score += 3
+
+    return score
+
+
+def get_quality_penalty(cleaned, lower_text, words):
+    penalty = 0
+
+    filler_words = {"um", "uh", "like", "you know", "sort of", "kind of", "basically"}
+    filler_count = 0
+
+    for filler in filler_words:
+        filler_count += lower_text.count(filler)
+
+    penalty += min(filler_count * 2, 12)
+
+    weird_char_count = sum(1 for ch in cleaned if ch in "�")
+    penalty += weird_char_count * 6
+
+    if has_heavy_repetition(words):
+        penalty += 15
+
+    if len(words) < 18:
+        penalty += 10
+
+    if cleaned.endswith(("...", ",", ";", ":")):
+        penalty += 8
+
+    return penalty    
 
 
 def score_clip_text(text, duration):
     score = 0
-    cleaned = text.strip()
-    lower_text = cleaned.lower()
+    cleaned, lower_text, words = normalize_text_for_scoring(text)
+    word_count = len(words)
 
-    word_count = len(cleaned.split())
-    score += word_count
+    if word_count == 0:
+        return 0
 
+    # 1. Strong duration preference for short-form clips
+    if 18 <= duration <= 35:
+        score += 22
+    elif 15 <= duration <= 45:
+        score += 16
+    elif 12 <= duration <= 50:
+        score += 8
+    else:
+        score -= 8
+
+    # 2. Good word count range for spoken clips
+    if 35 <= word_count <= 90:
+        score += 18
+    elif 25 <= word_count <= 110:
+        score += 10
+    else:
+        score -= 6
+
+    # 3. Spoken density
     if duration > 0:
         word_density = word_count / duration
-        score += word_density * 10
-
-    if cleaned.endswith((".", "!", "?")):
-        score += 5
-    else:
-        score -= 3
-
-    filler_starts = ["um", "uh", "so", "well", "like", "you know"]
-    for filler in filler_starts:
-        if lower_text.startswith(filler):
+        if 2.2 <= word_density <= 4.8:
+            score += 12
+        elif 1.6 <= word_density <= 5.5:
+            score += 6
+        else:
             score -= 5
-            break
 
-    weak_endings = ["and", "but", "so", "because", "then", "or", "if", "to"]
-    words = cleaned.split()
-    if words:
-        last_word = words[-1].lower().rstrip(".,!?")
-        if last_word in weak_endings:
-            score -= 6
+    # 4. Hook / curiosity / opinion patterns
+    score += get_hook_pattern_score(lower_text)
 
-    if word_count < 8:
+    # 5. Takeaway / conclusion patterns
+    score += get_takeaway_pattern_score(lower_text)
+
+    # 6. Specificity / detail
+    score += get_specificity_score(cleaned, words)
+
+    # 7. Direct audience language
+    if "you" in words or "your" in words:
+        score += 6
+
+    # 8. Strong punctuation / spoken finish
+    if cleaned.endswith(("?", "!", ".")):
+        score += 6
+    else:
         score -= 4
+
+    if "?" in cleaned:
+        score += 6
+
+    # 9. First-person storytelling tends to clip well
+    storytelling_terms = {"i", "we", "my", "our", "me"}
+    storytelling_hits = sum(1 for word in words if word in storytelling_terms)
+    score += min(storytelling_hits * 1.5, 8)
+
+    # 10. Contrast creates tension
+    contrast_terms = {"but", "however", "instead", "except", "although", "though", "yet"}
+    contrast_hits = sum(1 for word in words if word in contrast_terms)
+    score += min(contrast_hits * 3, 9)
+
+    # 11. Penalize low-quality transcript segments
+    score -= get_quality_penalty(cleaned, lower_text, words)
+
+    # 12. Boundary quality still matters
+    if has_good_clip_boundaries(cleaned):
+        score += 10
+    else:
+        score -= 12
 
     return round(score, 2)
 
@@ -460,8 +653,8 @@ def has_good_clip_boundaries(text):
     first_word = words[0].lower().strip(".,!?")
     last_word = words[-1].lower().strip(".,!?")
 
-    weak_starts = ["and", "but", "so", "because", "then", "or", "if", "well"]
-    weak_endings = ["and", "but", "so", "because", "then", "or", "if", "to"]
+    weak_starts = ["and", "but", "so", "because", "then", "or", "if", "well", "also", "anyway"]
+    weak_endings = ["and", "but", "so", "because", "then", "or", "if", "to", "of", "with"]
 
     if first_word in weak_starts:
         return False
@@ -472,11 +665,95 @@ def has_good_clip_boundaries(text):
     if not cleaned.endswith((".", "!", "?")):
         return False
 
+    if len(words) < 12:
+        return False
+
+    if "�" in cleaned:
+        return False
+
     return True
+
+def detect_main_face_center_x(video_path):
+    face_cascade = cv2.CascadeClassifier(
+        cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+    )
+
+    cap = cv2.VideoCapture(video_path)
+
+    if not cap.isOpened():
+        return None
+
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    if frame_count <= 0:
+        cap.release()
+        return None
+
+    sample_points = [0.15, 0.35, 0.5, 0.65, 0.85]
+    centers = []
+    frame_width = None
+    frame_height = None
+
+    for point in sample_points:
+        target_frame = int(frame_count * point)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame)
+        success, frame = cap.read()
+
+        if not success or frame is None:
+            continue
+
+        frame_height, frame_width = frame.shape[:2]
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+        faces = face_cascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(60, 60)
+        )
+
+        if len(faces) == 0:
+            continue
+
+        largest_face = max(faces, key=lambda f: f[2] * f[3])
+        x, y, w, h = largest_face
+        center_x = x + (w / 2)
+        centers.append(center_x)
+
+    cap.release()
+
+    if not centers or frame_width is None or frame_height is None:
+        return None
+
+    avg_center_x = sum(centers) / len(centers)
+    return avg_center_x, frame_width, frame_height
+
+def build_face_centered_crop_filter(input_clip_path, output_width=720, output_height=1280):
+    face_result = detect_main_face_center_x(input_clip_path)
+
+    if face_result is None:
+        return (
+            f"scale={output_width}:{output_height}:force_original_aspect_ratio=increase,"
+            f"crop={output_width}:{output_height}"
+        )
+
+    center_x, frame_width, frame_height = face_result
+
+    # For vertical 9:16 output, crop width should be based on frame height
+    crop_width = frame_height * (output_width / output_height)
+    crop_width = min(crop_width, frame_width)
+
+    left = max(0, min(center_x - (crop_width / 2), frame_width - crop_width))
+
+    return (
+        f"crop={int(crop_width)}:{int(frame_height)}:{int(left)}:0,"
+        f"scale={output_width}:{output_height}"
+    )
 
 
 def run_pipeline_job(job_id, video_path):
     try:
+        start_total = time.time()
+        timings = {}        
         JOBS[job_id]["status"] = "processing"
         JOBS[job_id]["stage"] = "Extracting audio..."
         JOBS[job_id]["progress"] = 15
@@ -487,6 +764,7 @@ def run_pipeline_job(job_id, video_path):
         os.makedirs(THUMBNAILS_PATH, exist_ok=True)
 
         # extract audio
+        start_audio = time.time()        
         extract_command = [
             "ffmpeg",
             "-y",
@@ -499,6 +777,7 @@ def run_pipeline_job(job_id, video_path):
         ]
 
         extract_result = subprocess.run(extract_command, capture_output=True, text=True)
+        timings["audio_extraction"] = round(time.time() - start_audio, 2)        
 
         if extract_result.returncode != 0:
             JOBS[job_id]["status"] = "failed"
@@ -521,7 +800,9 @@ def run_pipeline_job(job_id, video_path):
         JOBS[job_id]["progress"] = 35
         
         # transcribe
+        start_transcribe = time.time()
         result = model.transcribe(AUDIO_PATH)
+        timings["transcription"] = round(time.time() - start_transcribe, 2)        
 
         with open(TRANSCRIPT_PATH, "w", encoding="utf-8") as f:
             f.write(result["text"])
@@ -539,7 +820,8 @@ def run_pipeline_job(job_id, video_path):
 
         JOBS[job_id]["stage"] = "Building clip candidates..."
         JOBS[job_id]["progress"] = 55
-
+        
+        start_clip_gen = time.time()
         # find clips by combining neighboring segments
         clips = []
         segments = result["segments"]
@@ -564,10 +846,33 @@ def run_pipeline_job(job_id, video_path):
                 if duration >= (min_clip_duration * 0.7):
                     clip_text = combined_text.strip()
 
+                    # don't accept weak boundaries too early
                     if not has_good_clip_boundaries(clip_text):
                         continue
 
+                    # if we have room, keep extending to try to complete the thought
+                    extended_end_time = end_time
+                    extended_text = clip_text
+
+                    for k in range(j + 1, len(segments)):
+                        possible_end = segments[k]["end"]
+                        possible_duration = possible_end - start_time
+
+                        if possible_duration > max_clip_duration:
+                            break
+
+                        extended_end_time = segments[k]["end"]
+                        extended_text += " " + segments[k]["text"].strip()
+
+                        if has_good_clip_boundaries(extended_text.strip()):
+                            clip_text = extended_text.strip()
+                            end_time = extended_end_time
+
+                    duration = end_time - start_time
                     clip_score = score_clip_text(clip_text, duration)
+
+                    if clip_score < 55:
+                        continue
 
                     clips.append({
                         "start": start_time,
@@ -576,7 +881,11 @@ def run_pipeline_job(job_id, video_path):
                         "text": clip_text,
                         "score": clip_score
                     })
-                    break
+                    break                
+                
+        timings["clip_generation"] = round(time.time() - start_clip_gen, 2) 
+        
+                       
         JOBS[job_id]["stage"] = "Scoring and filtering clips..."
         JOBS[job_id]["progress"] = 70
         clips.sort(key=lambda x: x["score"], reverse=True)
@@ -612,6 +921,8 @@ def run_pipeline_job(job_id, video_path):
         JOBS[job_id]["filtered_clip_candidates"] = len(clips)
         JOBS[job_id]["stage"] = "Cutting clips and generating thumbnails..."
         JOBS[job_id]["progress"] = 85
+
+        start_cutting = time.time()
         created_clips = []
 
         for index, clip in enumerate(clips, start=1):
@@ -660,12 +971,16 @@ def run_pipeline_job(job_id, video_path):
                 "ffmpeg_return_code": cut_result.returncode
             })
 
+        timings["cutting_and_thumbnails"] = round(time.time() - start_cutting, 2)
+        timings["total"] = round(time.time() - start_total, 2)
+
         JOBS[job_id]["status"] = "complete"
         JOBS[job_id]["stage"] = "Ready"
         JOBS[job_id]["progress"] = 100
         JOBS[job_id]["segment_count"] = len(result["segments"])
         JOBS[job_id]["clip_count"] = len(created_clips)
         JOBS[job_id]["clips"] = created_clips
+        JOBS[job_id]["timings"] = timings        
         
 
     except Exception as e:
@@ -683,10 +998,11 @@ def start_job():
     job_id = str(uuid.uuid4())
 
     JOBS[job_id] = {
-    "status": "processing",
-    "stage": "Starting job...",
-    "progress": 5,
-    "clips": []
+        "status": "processing",
+        "stage": "Starting job...",
+        "progress": 5,
+        "clips": [],
+        "upload_info": LAST_UPLOAD_INFO.copy()
     }
     
 
@@ -755,6 +1071,7 @@ def job_results(job_id: str, sort_by: str = "timeline"):
         "status": job["status"],
         "stage": job.get("stage", "Ready"),
         "progress": job.get("progress", 100),
+        "upload_info": job.get("upload_info"),
         "video_duration": job.get("video_duration"),
         "audio_duration": job.get("audio_duration"),
         "min_clip_duration": job.get("min_clip_duration"),
@@ -762,6 +1079,7 @@ def job_results(job_id: str, sort_by: str = "timeline"):
         "raw_clip_candidates": job.get("raw_clip_candidates"),
         "filtered_clip_candidates": job.get("filtered_clip_candidates"),
         "clip_count": job.get("clip_count", 0),
+        "timings": job.get("timings"),
         "clips": cleaned_clips
     }
 
@@ -856,6 +1174,9 @@ def home():
 
 def run_final_render_job(render_job_id, job_id, clip_number):
     try:
+        start_total_render = time.time()
+        render_timings = {}
+
         RENDER_JOBS[render_job_id]["status"] = "processing"
         RENDER_JOBS[render_job_id]["stage"] = "Preparing render..."
         RENDER_JOBS[render_job_id]["progress"] = 10
@@ -899,6 +1220,7 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         RENDER_JOBS[render_job_id]["stage"] = "Creating captions..."
         RENDER_JOBS[render_job_id]["progress"] = 30
+        start_caption_creation = time.time()        
 
         def format_srt_time(seconds):
             hours = int(seconds // 3600)
@@ -937,24 +1259,28 @@ def run_final_render_job(render_job_id, job_id, clip_number):
                 f.write(f"{format_srt_time(seg['start'])} --> {format_srt_time(seg['end'])}\n")
                 f.write(f"{seg['text']}\n\n")
 
+        render_timings["caption_creation"] = round(time.time() - start_caption_creation, 2)
+
         RENDER_JOBS[render_job_id]["stage"] = "Formatting vertical video..."
         RENDER_JOBS[render_job_id]["progress"] = 55
+        start_vertical_render = time.time()
+
+        crop_filter = build_face_centered_crop_filter(input_clip)
 
         vertical_command = [
             "ffmpeg",
             "-y",
             "-i", input_clip,
-            "-vf",
-            "scale=720:1280:force_original_aspect_ratio=increase,"
-            "crop=720:1280",
+            "-vf", crop_filter,
             "-c:v", "libx264",
             "-preset", "ultrafast",
             "-crf", "28",
             "-c:a", "aac",
             vertical_file
-        ]
+        ]        
 
         vertical_result = subprocess.run(vertical_command, capture_output=True, text=True)
+        render_timings["vertical_render"] = round(time.time() - start_vertical_render, 2)        
 
         if vertical_result.returncode != 0:
             RENDER_JOBS[render_job_id]["status"] = "failed"
@@ -968,6 +1294,7 @@ def run_final_render_job(render_job_id, job_id, clip_number):
 
         RENDER_JOBS[render_job_id]["stage"] = "Burning captions..."
         RENDER_JOBS[render_job_id]["progress"] = 80
+        start_caption_burn = time.time()
 
         burn_command = [
             "ffmpeg",
@@ -982,6 +1309,7 @@ def run_final_render_job(render_job_id, job_id, clip_number):
         ]
 
         burn_result = subprocess.run(burn_command, capture_output=True, text=True)
+        render_timings["caption_burn"] = round(time.time() - start_caption_burn, 2)        
 
         if burn_result.returncode != 0:
             RENDER_JOBS[render_job_id]["status"] = "failed"
@@ -991,12 +1319,15 @@ def run_final_render_job(render_job_id, job_id, clip_number):
             RENDER_JOBS[render_job_id]["stderr"] = burn_result.stderr[-1000:]
             return
 
+        render_timings["total"] = round(time.time() - start_total_render, 2)
+
         RENDER_JOBS[render_job_id]["status"] = "complete"
         RENDER_JOBS[render_job_id]["stage"] = "Ready"
         RENDER_JOBS[render_job_id]["progress"] = 100
         RENDER_JOBS[render_job_id]["job_id"] = job_id
         RENDER_JOBS[render_job_id]["clip_number"] = clip_number
         RENDER_JOBS[render_job_id]["final_file"] = final_file
+        RENDER_JOBS[render_job_id]["timings"] = render_timings
         
     except Exception as e:
         RENDER_JOBS[render_job_id]["status"] = "failed"

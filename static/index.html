@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Podcast Clips MVP</title>
   <style>
+    .clip-count-label {
+      font-size: 13px;
+      color: #a9b2c3;
+      padding-left: 4px;
+      white-space: nowrap;
+    }
+    .filter-btn-active {
+      background: #3b82f6;
+      color: white;
+      border: 1px solid #60a5fa;
+      box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.25);
+    }
+
     #summaryCard.hidden {
       display: none;
     }
@@ -98,12 +111,44 @@
       color: #a9b2c3;
     }
 
-    .upload-box {
+      .upload-box {
       border: 2px dashed #364055;
       border-radius: 14px;
       padding: 24px;
       text-align: center;
       background: #11141a;
+      transition: padding 0.2s ease, min-height 0.2s ease;
+    }
+
+    .upload-box.compact {
+      padding: 14px 16px;
+      text-align: left;
+    }
+
+    .upload-box.compact .upload-intro {
+      display: none;
+    }
+
+    .upload-box.compact .upload-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .upload-box.compact .upload-controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      flex: 1 1 520px;
+    }
+
+    .upload-box.compact .upload-status-wrap {
+      flex: 1 1 100%;
+      text-align: left;
+      margin-top: 2px;
     }
 
     .upload-box input[type="file"] {
@@ -359,6 +404,19 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .card.compact-status {
+      padding: 14px 18px;
+    }
+
+    .card.compact-status h2 {
+      margin-bottom: 10px;
+      font-size: 22px;
+    }
+
+    .card.compact-status .status-line {
+      margin-top: 8px;
+    }
   </style>
 </head>
 <body>
@@ -373,18 +431,27 @@
       <div class="left-column">
         <div class="card">
           <h2>Upload Video</h2>
-          <div class="upload-box">
-            <div>Select a podcast or long-form video to begin.</div>
-            <input type="file" id="videoFile" accept="video/*" />
-            <div class="button-row">
-              <button id="uploadBtn">Upload Video</button>
-              <button id="processBtn" class="secondary-btn" disabled>Find Best Clips</button>
+                    <div class="upload-box" id="uploadBox">
+            <div class="upload-intro">Select a podcast or long-form video to begin.</div>
+
+            <div class="upload-inner">
+              <div class="upload-controls">
+                <input type="file" id="videoFile" accept="video/*" />
+                <div class="button-row">
+                  <button id="uploadBtn">Upload Video</button>
+                  <button id="processBtn" class="secondary-btn" disabled>Find Best Clips</button>
+                  <button id="resetBtn" class="secondary-btn">Start Over</button>
+                </div>
+              </div>
+
+              <div class="upload-status-wrap">
+                <div class="status-line" id="uploadStatus">No file uploaded yet.</div>
+              </div>
             </div>
-            <div class="status-line" id="uploadStatus">No file uploaded yet.</div>
           </div>
         </div>
 
-        <div class="card">
+        <div class="card" id="processingCard">
           <h2>Processing Status</h2>
           <div class="muted" id="jobStage">Waiting to start.</div>
           <div class="progress-wrap">
@@ -427,6 +494,10 @@
                 <option value="timeline">Timeline</option>
                 <option value="score">Best Score</option>
               </select>
+
+              <button id="showAllBtn" class="secondary-btn">View: All</button>
+              <button id="showTopBtn" class="secondary-btn">View: Top Picks</button>
+              <span id="clipCountLabel" class="clip-count-label">Showing 0 clips</span>
             </div>
           </div>
 
@@ -497,21 +568,28 @@
     let uploadedFilename = null;
     let currentJobId = null;
     let currentSortBy = "timeline";
+    let currentClipFilter = "all";
     let clipsData = [];
     let selectedClip = null;
     let selectedClipCardElement = null;
     let currentRenderJobId = null;
 
+    const uploadBox = document.getElementById("uploadBox");
     const videoFileInput = document.getElementById("videoFile");
     const uploadBtn = document.getElementById("uploadBtn");
     const processBtn = document.getElementById("processBtn");
+    const resetBtn = document.getElementById("resetBtn");
     const uploadStatus = document.getElementById("uploadStatus");
 
+    const processingCard = document.getElementById("processingCard");
     const jobStage = document.getElementById("jobStage");
     const jobStatusText = document.getElementById("jobStatusText");
     const jobProgressBar = document.getElementById("jobProgressBar");
 
     const sortBySelect = document.getElementById("sortBy");
+    const showAllBtn = document.getElementById("showAllBtn");
+    const showTopBtn = document.getElementById("showTopBtn");
+    const clipCountLabel = document.getElementById("clipCountLabel");
     const clipsGrid = document.getElementById("clipsGrid");
 
     const selectedClipEmpty = document.getElementById("selectedClipEmpty");
@@ -538,15 +616,10 @@
     const summaryClipCount = document.getElementById("summaryClipCount");
     const summaryBestScore = document.getElementById("summaryBestScore");
 
-    uploadBtn.addEventListener("click", uploadVideo);
-    processBtn.addEventListener("click", startJob);
-    sortBySelect.addEventListener("change", async function () {
-      currentSortBy = sortBySelect.value;
-      if (currentJobId) {
-        await loadJobResults();
-      }
-    });
-    renderBtn.addEventListener("click", startFinalRender);
+    function updateClipFilterButtons() {
+      showAllBtn.classList.toggle("filter-btn-active", currentClipFilter === "all");
+      showTopBtn.classList.toggle("filter-btn-active", currentClipFilter === "top");
+    }
 
     function formatSeconds(seconds) {
       if (seconds === null || seconds === undefined || isNaN(seconds)) {
@@ -599,9 +672,11 @@
         uploadStatus.textContent = `Uploaded: ${uploadedFilename}`;
         summaryFile.textContent = uploadedFilename;
         summaryCard.classList.remove("hidden");
+        uploadBox.classList.add("compact");
         processBtn.disabled = false;
       } catch (error) {
         uploadStatus.textContent = `Upload failed: ${error.message}`;
+        uploadBox.classList.remove("compact");
       } finally {
         uploadBtn.disabled = false;
       }
@@ -618,6 +693,7 @@
       clipsGrid.innerHTML = "";
       clearSelectedClip();
       resetFinalRenderUI();
+      processingCard.classList.remove("compact-status");
       summaryVideoLength.textContent = "-";
       summaryClipCount.textContent = "-";
       summaryBestScore.textContent = "-";
@@ -712,6 +788,7 @@
           jobStage.textContent = data.stage || "Ready";
           jobStatusText.textContent = `${clipsData.length} clips available.`;
           jobProgressBar.style.width = `${data.progress ?? 100}%`;
+          processingCard.classList.add("compact-status");
 
         if (clipsData.length > 0) {
             const firstClipNumber = clipsData[0].clip_number ?? clipsData[0].clip_num ?? 1;
@@ -748,6 +825,27 @@
 
     function renderClipsGrid() {
       clipsGrid.innerHTML = "";
+
+      let displayClips = [...clipsData];
+
+      if (currentClipFilter === "top") {
+        displayClips = [...clipsData]
+          .sort((a, b) => Number(b.score ?? 0) - Number(a.score ?? 0))
+          .slice(0, 3);
+      }
+
+      if (clipsData.length === 0) {
+        clipCountLabel.textContent = "Showing 0 clips";
+      } else if (currentClipFilter === "top") {
+        clipCountLabel.textContent = `Showing ${displayClips.length} of ${clipsData.length} clips`;
+      } else {
+        clipCountLabel.textContent = `Showing ${displayClips.length} clips`;
+      }
+
+      if (!displayClips.length) {
+        clipsGrid.innerHTML = `<div class="muted">No clips found.</div>`;
+        return;
+      }
       
 
       if (!clipsData.length) {
@@ -755,7 +853,7 @@
         return;
       }
 
-      clipsData.forEach(function (clip, index) {
+      displayClips.forEach(function (clip, index) {
         const clipNumber = clip.clip_number ?? clip.clip_num ?? index + 1;
         const score = clip.score ?? "-";
         const duration = clip.duration ?? ((clip.end ?? 0) - (clip.start ?? 0));
@@ -782,7 +880,9 @@
                 <strong>Clip ${clipNumber}</strong>
                 <span class="clip-badge">Candidate</span>
           </div>
-              ${isTopPick ? '<span class="badge top-pick">Top Pick</span>' : '<span class="badge">Candidate</span>'}
+              ${currentClipFilter === "top" && isTopPick
+                ? '<span class="badge top-pick">Top Pick</span>'
+                : '<span class="badge">Candidate</span>'}
             </div>
 
             <div class="clip-meta">
@@ -995,6 +1095,43 @@
       }, 2500);
     }
 
+    function resetAppState() {
+      uploadedFilename = null;
+      currentJobId = null;
+      currentRenderJobId = null;
+      currentSortBy = "timeline";
+      currentClipFilter = "all";
+      clipsData = [];
+      selectedClip = null;
+
+      videoFileInput.value = "";
+      sortBySelect.value = "timeline";
+      updateClipFilterButtons();
+
+      uploadBox.classList.remove("compact");
+      uploadStatus.textContent = "No file uploaded yet.";
+
+      processBtn.disabled = true;
+      uploadBtn.disabled = false;
+      resetBtn.disabled = false;
+
+      clipsGrid.innerHTML = "";
+      clearSelectedClip();
+      resetFinalRenderUI();
+      clipCountLabel.textContent = "Showing 0 clips";
+
+      jobStage.textContent = "Waiting to start.";
+      jobStatusText.textContent = "No active job.";
+      jobProgressBar.style.width = "0%";
+      processingCard.classList.remove("compact-status");
+
+      summaryCard.classList.add("hidden");
+      summaryFile.textContent = "-";
+      summaryVideoLength.textContent = "-";
+      summaryClipCount.textContent = "-";
+      summaryBestScore.textContent = "-";
+    }
+
     function resetFinalRenderUI() {
       currentRenderJobId = null;
       renderStage.textContent = "No active render.";
@@ -1006,6 +1143,34 @@
       renderBtn.disabled = false;
       renderBtn.textContent = "Create Vertical Clip";
     }
+
+        uploadBtn.addEventListener("click", uploadVideo);
+    processBtn.addEventListener("click", startJob);
+    resetBtn.addEventListener("click", resetAppState);
+
+    sortBySelect.addEventListener("change", async function () {
+      currentSortBy = sortBySelect.value;
+      if (currentJobId) {
+        await loadJobResults();
+      }
+    });
+
+    showAllBtn.addEventListener("click", function () {
+      currentClipFilter = "all";
+      updateClipFilterButtons();
+      renderClipsGrid();
+    });
+
+    showTopBtn.addEventListener("click", function () {
+      currentClipFilter = "top";
+      updateClipFilterButtons();
+      renderClipsGrid();
+    });
+
+    renderBtn.addEventListener("click", startFinalRender);
+
+    clipCountLabel.textContent = "Showing 0 clips";    
+    updateClipFilterButtons();
   </script>
 </body>
 </html>
